@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Railway HR Login</title>
+    <title>HRMS Login</title>
     <style>
         .toggle-password {
             cursor: pointer;
@@ -147,7 +147,6 @@
         <div class="links">
             <p><a href="#">Forgot Password?</a></p>
         </div>
-
         
     </div>
     <script>
@@ -173,7 +172,7 @@
             const captchaDisplayed = document.getElementById('captcha').textContent;
 
             const usernameRegex = /^[a-zA-Z0-9_]+$/;
-            const passwordRegex = /^(?=.[a-z])(?=.[A-Z])(?=.\d)(?=.[!@#$%^&*()_+\-={};':",.<>?]).{6,}$/;
+            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={};':",.<>?]).{6,}$/;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
             if (!username || !password || !email || !captchaInput) {
