@@ -9,7 +9,7 @@
     "client": "npm start --prefix client",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },
-  "author": "Your Name",
+  "author": "group 07",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
