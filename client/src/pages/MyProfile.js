@@ -3,9 +3,9 @@ import React, { useState } from 'react';
 // Assuming mock data for demonstration purposes
 const mockUser = {
   _id: 'emp1',
-  firstName: 'John',
-  lastName: 'Doe',
-  email: 'john.doe@example.com',
+  firstName: 'Cristiano',
+  lastName: 'Ronaldo',
+  email: 'ronaldo.doe@example.com',
   employeeId: 'EMP001',
   role: 'employee',
   department: 'Engineering',

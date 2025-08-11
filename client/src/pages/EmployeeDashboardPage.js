@@ -9,8 +9,8 @@ import MySalary from './MySalary.js';
 const mockAuthToken = "mock-jwt-token-for-employee";
 const mockUser = {
   _id: 'emp1',
-  name: 'John Doe',
-  email: 'john.doe@example.com',
+  name: 'Ronaldo',
+  email: 'suii@portugal.com',
   role: 'employee',
 };
 
