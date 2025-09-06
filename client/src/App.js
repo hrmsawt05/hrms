@@ -1,67 +1,88 @@
 // client/src/App.js
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Import all your pages here
+// Import Pages
 import Login from './pages/Login.js';
 import AdminDashboardPage from './pages/AdminDashboardPage.js';
 import EmployeeDashboardPage from './pages/EmployeeDashboardPage.js';
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+// This is a wrapper to protect routes that require authentication
+const ProtectedRoute = ({ children, requiredRole }) => {
+    const { isAuthenticated, user } = useAuth();
 
-  useEffect(() => {
-    // Check for a stored user token and data on load
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    if (token && userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error("Failed to parse user data from local storage.");
-        localStorage.clear();
-      }
-    }
-    setLoading(false);
-  }, []);
-
-  // Conditional rendering based on user status and role
-  const renderApp = () => {
-    // Show a loading screen while we check for the user
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
-          <p className="text-xl font-semibold text-gray-700">Loading...</p>
-        </div>
-      );
-    }
-    
-    // If no user is logged in, show the login page and pass a function to set the user
-    if (!user) {
-      return <Login onLogin={setUser} />;
-    }
-    
-    // If user is an admin, show the admin dashboard
-    if (user.role === 'admin') {
-      return <AdminDashboardPage />;
+    if (!isAuthenticated) {
+        // If not logged in, redirect to the login page
+        return <Navigate to="/login" replace />;
     }
 
-    // If user is an employee, show the employee dashboard
-    if (user.role === 'employee') {
-      return <EmployeeDashboardPage />;
+    if (requiredRole && user.role !== requiredRole) {
+        // If logged in but doesn't have the required role, redirect to a fallback page
+        // For simplicity, we'll redirect them to their default dashboard
+        return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'} replace />;
     }
 
-    // Fallback if role is not recognized
+    return children;
+};
+
+
+function AppContent() {
+    const { user, isAuthenticated } = useAuth();
+
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <p className="text-xl font-semibold text-red-500">Error: User role not recognized.</p>
-      </div>
-    );
-  };
+        <Routes>
+            <Route path="/login" element={<Login />} />
 
-  return renderApp();
+            {/* Admin Routes */}
+            <Route
+                path="/admin/dashboard"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <AdminDashboardPage />
+                    </ProtectedRoute>
+                }
+            />
+            {/* Add other admin routes here, e.g., /admin/manage-employees */}
+
+            {/* Employee Routes */}
+            <Route
+                path="/employee/dashboard"
+                element={
+                    <ProtectedRoute requiredRole="employee">
+                        <EmployeeDashboardPage />
+                    </ProtectedRoute>
+                }
+            />
+            {/* Add other employee routes here, e.g., /employee/my-profile */}
+
+
+            {/* Redirect logic for the root path */}
+            <Route
+                path="/"
+                element={
+                    isAuthenticated ? (
+                        <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'} replace />
+                    ) : (
+                        <Navigate to="/login" replace />
+                    )
+                }
+            />
+             {/* Fallback for any other path */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+    );
+}
+
+// Main App component now sets up the Provider and Router
+function App() {
+    return (
+        <AuthProvider>
+            <Router>
+                <AppContent />
+            </Router>
+        </AuthProvider>
+    );
 }
 
 export default App;

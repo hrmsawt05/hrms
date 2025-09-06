@@ -1,20 +1,33 @@
-// routes/employeeRoutes.js
 const express = require('express');
 const router = express.Router();
-const { createEmployee, getAllEmployees, getEmployeeById } = require('../controllers/employeeController');
+
+const { 
+    createUser, 
+    getAllUsers, 
+    getUserById,
+    getMyProfile 
+} = require('../controllers/employeeController');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-// ⭐ The router.post endpoint to create a new employee
-// This route is protected by both authMiddleware and roleMiddleware(['admin'])
-router.post('/', authMiddleware, roleMiddleware(['admin']), createEmployee);
+// @route   POST /api/employees
+// @desc    Admin creates a new user/employee
 
-// ⭐ The router.get endpoint to get all employees
-// This route is also protected by both middleware, ensuring only admins can see the full list.
-router.get('/', authMiddleware, roleMiddleware(['admin']), getAllEmployees);
+router.post('/', authMiddleware, roleMiddleware(['admin']), createUser);
 
-// ⭐ The router.get endpoint to get a single employee by ID
-// This route is protected for both 'admin' and 'employee' roles.
-router.get('/:id', authMiddleware, roleMiddleware(['admin', 'employee']), getEmployeeById);
+// @route   GET /api/employees
+// @desc    Admin gets all users
+router.get('/', authMiddleware, roleMiddleware(['admin']), getAllUsers);
+
+// @route   GET /api/employees/profile/me
+// @desc    A logged-in user gets their own profile
+
+router.get('/profile/me', authMiddleware, getMyProfile);
+
+// @route   GET /api/employees/:id
+// @desc    Get a single user by their ID
+// Note: This general route comes AFTER the more specific '/profile/me' route
+router.get('/:id', authMiddleware, getUserById);
 
 module.exports = router;
+

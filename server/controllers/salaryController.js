@@ -1,46 +1,45 @@
 // controllers/salaryController.js
 const Salary = require('../models/Salary');
-const Employee = require('../models/Employee');
-const SalaryStructure = require('../models/SalaryStructure'); // ⭐ Import the new SalaryStructure model
-const User = require('../models/User'); // We need this to get user roles
+const SalaryStructure = require('../models/SalaryStructure');
+const User = require('../models/User'); // The ONLY model we need for employee data
 
-// @desc    Create a new salary record for an employee based on SalaryStructure
+// @desc    Create a new salary record for an employee
 // @route   POST /api/salaries
 // @access  Private/Admin
 const createSalaryRecord = async (req, res) => {
     try {
-        // We only need the employeeId, month, and year from the request body
-        const { employeeId, month, year } = req.body;
+        const { employeeId, month, year, incentives = 0 } = req.body;
 
-        // 1. Find the employee to get their role, position, and department
-        const employee = await Employee.findById(employeeId);
-        if (!employee) {
-            return res.status(404).json({ message: 'Employee not found' });
-        }
-
-        // We also need the user's role from the User model
+        // 1. Find the employee's complete record from the User model
         const user = await User.findById(employeeId);
         if (!user) {
-            return res.status(404).json({ message: 'User record not found' });
+            return res.status(404).json({ message: 'User not found' });
         }
 
-        // 2. Find the salary structure for this employee's role and department
+        // 2. Find the salary structure for this user's role, position, and department
         const salaryStructure = await SalaryStructure.findOne({
             role: user.role,
-            department: employee.departmentId,
-            position: employee.position, // Assuming we've added a position field to the employee model
+            department: user.department,
+            position: user.position,
         });
 
         if (!salaryStructure) {
-            return res.status(404).json({ message: 'Salary structure not found for this employee.' });
+            return res.status(404).json({
+                message: `Salary structure not found for a ${user.position} in this department.`
+            });
         }
-        
-        // 3. Calculate net salary based on the structure (and attendance, if implemented)
-        // For now, we'll use the structure directly. You can add attendance logic here later.
-        const { basePay, hra, insurance, incentives } = salaryStructure;
+
+        // 3. Check if a salary record for this month/year already exists
+        const existingRecord = await Salary.findOne({ employeeId, month, year });
+        if (existingRecord) {
+            return res.status(400).json({ message: `Salary record for ${month}/${year} already exists.` });
+        }
+
+        // 4. Calculate net salary
+        const { basePay, hra, insurance } = salaryStructure;
         const netSalary = (basePay + hra + incentives) - insurance;
 
-        // 4. Create the new salary record
+        // 5. Create and save the new salary record
         const newSalaryRecord = new Salary({
             employeeId,
             basePay,
@@ -60,19 +59,18 @@ const createSalaryRecord = async (req, res) => {
         });
     } catch (err) {
         console.error('Create salary record error:', err);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error while creating salary record.' });
     }
 };
 
-// ... (other functions like getAllSalaryRecords remain the same)
-
-// @desc    Get all salary records (Admin only)
+// @desc    Get all salary records
 // @route   GET /api/salaries
 // @access  Private/Admin
 const getAllSalaryRecords = async (req, res) => {
     try {
-        // Find all salary records and populate employee details
-        const salaries = await Salary.find({}).populate('employeeId', 'firstName lastName email');
+        const salaries = await Salary.find({})
+            .populate('employeeId', 'fullName email') // Using the 'fullName' virtual
+            .sort({ year: -1, month: -1 }); // Sort by most recent first
         res.status(200).json(salaries);
     } catch (err) {
         console.error('Get all salary records error:', err);
@@ -82,17 +80,20 @@ const getAllSalaryRecords = async (req, res) => {
 
 // @desc    Get salary records for a specific employee
 // @route   GET /api/salaries/employee/:employeeId
-// @access  Private/Admin & Employee
+// @access  Private/Admin or the specific Employee
 const getEmployeeSalaryRecords = async (req, res) => {
     try {
-        const salaries = await Salary.find({ employeeId: req.params.employeeId });
-
-        if (!salaries) {
-            return res.status(404).json({ message: 'Salary records not found for this employee' });
-        }
-        
+        // Security check: an employee can only view their own salary
         if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.employeeId) {
-             return res.status(403).json({ message: 'Access denied' });
+            return res.status(403).json({ message: 'Access denied.' });
+        }
+
+        const salaries = await Salary.find({ employeeId: req.params.employeeId })
+            .sort({ year: -1, month: -1 }); // Sort by most recent first
+
+        // Refined "not found" check
+        if (!salaries || salaries.length === 0) {
+            return res.status(404).json({ message: 'No salary records found for this employee.' });
         }
 
         res.status(200).json(salaries);

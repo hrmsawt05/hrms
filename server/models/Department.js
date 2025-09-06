@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
+// Corrected the filename from Depatment.js to Department.js
+
 const departmentSchema = new mongoose.Schema({
-    // Mapped from the SQL table's related fields
     departmentName: {
         type: String,
         required: true,

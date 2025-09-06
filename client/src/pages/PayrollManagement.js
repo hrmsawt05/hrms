@@ -1,201 +1,185 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    getAllSalaryRecords, 
+    createSalaryRecord,
+    getAllUsers 
+} from '../api/adminService';
+import { format } from 'date-fns';
 
-// Assuming mock data for demonstration
-const mockAuthToken = "mock-jwt-token-for-admin";
-const mockEmployees = [
-  { _id: 'emp1', firstName: 'John', lastName: 'Doe', email: 'john.doe@example.com' },
-  { _id: 'emp2', firstName: 'Jane', lastName: 'Smith', email: 'jane.smith@example.com' },
-];
+// --- Icon & UI Components ---
+const LoadingSpinner = () => <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>;
+const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>;
+const XCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>;
 
-// Main App component for demonstration
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <PayrollManagement />
-    </div>
-  );
-}
 
 const PayrollManagement = () => {
-  const [salaries, setSalaries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({
-    employeeId: '',
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-  });
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+    const [salaryRecords, setSalaryRecords] = useState([]);
+    const [employees, setEmployees] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 1. Fetch all salary records
-  const fetchSalaries = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/salaries', {
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSalaries(data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch salary records.');
-      }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [recordsData, employeesData] = await Promise.all([
+                getAllSalaryRecords(),
+                getAllUsers()
+            ]);
+            const sortedRecords = recordsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setSalaryRecords(sortedRecords);
+            setEmployees(employeesData);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch payroll data.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  useEffect(() => {
-    fetchSalaries();
-  }, []);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-  // 2. Handle form submission to create a new salary record
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    setIsError(false);
-    setLoading(true);
+    return (
+        <div className="p-4 bg-white rounded-xl shadow-md">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Payroll Management</h2>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75"
+                >
+                    + Generate Salary
+                </button>
+            </div>
 
-    try {
-      const response = await fetch('/api/salaries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-        body: JSON.stringify(form),
-      });
+            {error && <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
 
-      const data = await response.json();
-      if (response.ok) {
-        setMessage('Salary record created successfully!');
-        setIsError(false);
-        setForm({ ...form, employeeId: '' }); // Reset employee dropdown
-        fetchSalaries(); // Refresh the list
-      } else {
-        throw new Error(data.message || 'Failed to create salary record.');
-      }
-    } catch (error) {
-      console.error('Create error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+            {loading ? (
+                <LoadingSpinner />
+            ) : (
+                <PayrollHistoryTable records={salaryRecords} />
+            )}
 
-  return (
-    <div className="container mx-auto max-w-7xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">Payroll Management</h1>
-      
-      {/* Message Box */}
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-semibold text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
+            {isModalOpen && (
+                <GenerateSalaryModal
+                    employees={employees}
+                    onClose={() => setIsModalOpen(false)}
+                    onSave={fetchData} // Refetch data after generating
+                />
+            )}
         </div>
-      )}
-
-      {/* Form to Create New Salary Record */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 mb-10">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Create Salary Record</h2>
-        <form onSubmit={handleCreate} className="space-y-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Employee</label>
-            <select
-              value={form.employeeId}
-              onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            >
-              <option value="">Select Employee</option>
-              {mockEmployees.map((emp) => (
-                <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Month</label>
-            <input
-              type="number"
-              value={form.month}
-              onChange={(e) => setForm({ ...form, month: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              min="1"
-              max="12"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Year</label>
-            <input
-              type="number"
-              value={form.year}
-              onChange={(e) => setForm({ ...form, year: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-          <div className="md:col-span-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center justify-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-              {loading ? 'Creating...' : 'Create Salary Record'}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Table to Display Existing Salary Records */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Existing Salary Records</h2>
-        {loading ? (
-          <p className="text-center text-gray-500">Loading records...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Salary</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Created</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {salaries.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-500">
-                      No salary records found.
-                    </td>
-                  </tr>
-                ) : (
-                  salaries.map((salary) => (
-                    <tr key={salary._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{salary.employeeId.firstName || 'N/A'} {salary.employeeId.lastName || ''}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{salary.month}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{salary.year}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-bold">${salary.netSalary}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(salary.createdAt).toLocaleDateString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
-export default App;
+// --- Sub-Components ---
+
+const PayrollHistoryTable = ({ records }) => (
+    <div className="overflow-x-auto">
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">Payroll History</h3>
+        <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+                <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Salary</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Calculated On</th>
+                </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                {records.length > 0 ? records.map(rec => (
+                    <tr key={rec._id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{rec.employeeId?.fullName || 'N/A'}</div>
+                            <div className="text-sm text-gray-500">{rec.employeeId?.email || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{format(new Date(rec.year, rec.month - 1), 'MMMM yyyy')}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-700">${rec.netSalary.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{format(new Date(rec.calculatedDate), 'MMM d, yyyy')}</td>
+                    </tr>
+                )) : (
+                    <tr><td colSpan="4" className="text-center py-4 text-gray-500">No salary records found.</td></tr>
+                )}
+            </tbody>
+        </table>
+    </div>
+);
+
+const GenerateSalaryModal = ({ employees, onClose, onSave }) => {
+    const currentYear = new Date().getFullYear();
+    const [formData, setFormData] = useState({
+        employeeId: '',
+        month: new Date().getMonth() + 1, // Default to current month
+        year: currentYear,
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formMessage, setFormMessage] = useState({ type: '', text: '' });
+
+    const handleChange = (e) => {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setFormMessage({ type: '', text: '' });
+        try {
+            await createSalaryRecord(formData);
+            setFormMessage({ type: 'success', text: 'Salary record generated successfully!' });
+            setTimeout(() => {
+                onSave();
+                onClose();
+            }, 1500);
+        } catch (err) {
+            setFormMessage({ type: 'error', text: err.message || 'Failed to generate salary.' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    // Create a list of months for the dropdown
+    const months = Array.from({length: 12}, (e, i) => new Date(null, i + 1, null).toLocaleDateString("en", {month: "long"}));
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+                <h3 className="text-xl font-bold mb-6">Generate New Salary Record</h3>
+                {formMessage.text && (
+                    <div className={`flex items-center p-3 rounded-lg mb-4 ${formMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {formMessage.type === 'success' ? <CheckCircleIcon /> : <XCircleIcon />}
+                        <span>{formMessage.text}</span>
+                    </div>
+                )}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                        <select name="employeeId" value={formData.employeeId} onChange={handleChange} required className="w-full p-2 border rounded">
+                            <option value="">Select an Employee</option>
+                            {employees.map(emp => <option key={emp._id} value={emp._id}>{emp.fullName} ({emp.position})</option>)}
+                        </select>
+                    </div>
+                    <div className="flex space-x-4">
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                            <select name="month" value={formData.month} onChange={handleChange} required className="w-full p-2 border rounded">
+                                {months.map((month, index) => <option key={index} value={index + 1}>{month}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                             <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                            <input type="number" name="year" value={formData.year} onChange={handleChange} required className="w-full p-2 border rounded" min={currentYear - 5} max={currentYear + 5} />
+                        </div>
+                    </div>
+                    <div className="flex justify-end space-x-4 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-300">
+                            {isSubmitting ? 'Generating...' : 'Generate'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default PayrollManagement;

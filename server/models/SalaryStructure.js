@@ -1,13 +1,12 @@
-// models/SalaryStructure.js
 const mongoose = require('mongoose');
 
 const salaryStructureSchema = new mongoose.Schema({
     role: {
         type: String,
         required: true,
-        enum: ['admin', 'employee'], // Corresponds to the roles in your User model
+        enum: ['admin', 'employee'],
     },
-    position: { // This could be something like 'Senior Developer', 'Team Lead', etc.
+    position: { // e.g., 'Senior Developer', 'Team Lead', etc.
         type: String,
         required: true,
     },
@@ -28,10 +27,9 @@ const salaryStructureSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
-    // We could add other components like 'incentives', 'bonus', etc.
 }, { timestamps: true });
 
-// Create a compound unique index to prevent duplicate salary structures
+// Compound unique index to prevent duplicate salary structures
 salaryStructureSchema.index({ role: 1, position: 1, department: 1 }, { unique: true });
 
 module.exports = mongoose.model('SalaryStructure', salaryStructureSchema);

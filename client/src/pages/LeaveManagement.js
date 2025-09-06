@@ -1,206 +1,163 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getLeaveRequests, updateLeaveRequestStatus } from '../api/adminService';
+import { format } from 'date-fns';
 
-// Assuming mock data for demonstration purposes
-const mockAuthToken = "mock-jwt-token-for-employee";
-const mockUserId = "emp1"; // This would come from the logged-in user object
+// SVG Icon Components for better readability
+const CheckCircleIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+);
 
-// Main App component for demonstration
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <LeaveManagement />
+const XCircleIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+);
+
+const LoadingSpinner = () => (
+    <div className="flex justify-center items-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
     </div>
-  );
-}
+);
 
-const LeaveManagement = () => {
-  const [leaves, setLeaves] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({
-    leaveType: 'sick',
-    fromDate: '',
-    toDate: '',
-  });
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+const LeaveRequests = () => {
+    const [leaveRequests, setLeaveRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [filter, setFilter] = useState('pending'); // 'pending', 'approved', 'rejected'
 
-  // 1. Fetch the logged-in employee's leave requests from the backend
-  const fetchMyLeaves = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/leaves/my-leaves', {
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setLeaves(data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch leave requests.');
-      }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchLeaveRequests = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const data = await getLeaveRequests();
+            // Sort by creation date, newest first
+            const sortedData = data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setLeaveRequests(sortedData);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch leave requests.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  useEffect(() => {
-    fetchMyLeaves();
-  }, []);
+    useEffect(() => {
+        fetchLeaveRequests();
+    }, [fetchLeaveRequests]);
 
-  // 2. Handle form submission to create a new leave request
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    setIsError(false);
+    const handleUpdateRequest = async (id, status) => {
+        // Find the specific request to update its state optimistically
+        const requestToUpdate = leaveRequests.find(req => req._id === id);
+        if (!requestToUpdate) return;
+        
+        const originalStatus = requestToUpdate.status;
+        
+        // Optimistic UI update
+        const updatedRequests = leaveRequests.map(req => 
+            req._id === id ? { ...req, status: status, processing: true } : req
+        );
+        setLeaveRequests(updatedRequests);
 
-    // Validate dates
-    if (new Date(form.fromDate) > new Date(form.toDate)) {
-        setMessage('End date cannot be before start date.');
-        setIsError(true);
-        return;
-    }
+        try {
+            const statusData = { status };
+            // Add a rejectedReason if rejecting (could be a modal in a real app)
+            if (status === 'rejected') {
+                statusData.rejectedReason = 'Rejected by Admin';
+            }
+            await updateLeaveRequestStatus(id, statusData);
+            // On success, refetch to get the latest data
+            fetchLeaveRequests();
+        } catch (err) {
+            setError(err.message || `Failed to update status.`);
+            // Revert on error
+             const revertedRequests = leaveRequests.map(req => 
+                req._id === id ? { ...req, status: originalStatus, processing: false } : req
+            );
+            setLeaveRequests(revertedRequests);
+        }
+    };
+    
+    const filteredRequests = leaveRequests.filter(req => req.status === filter);
 
-    try {
-      const response = await fetch('/api/leaves', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-        body: JSON.stringify(form),
-      });
+    return (
+        <div className="p-4 bg-white rounded-xl shadow-md">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Leave Management</h2>
+            
+            {error && <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
 
-      const data = await response.json();
-      if (response.ok) {
-        setMessage('Leave request submitted successfully!');
-        setIsError(false);
-        setForm({ leaveType: 'sick', fromDate: '', toDate: '' }); // Clear form
-        fetchMyLeaves(); // Refresh the list
-      } else {
-        throw new Error(data.message || 'Failed to submit leave request.');
-      }
-    } catch (error) {
-      console.error('Create error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    }
-  };
+            <div className="flex space-x-2 border-b mb-4">
+                <TabButton text="Pending" active={filter === 'pending'} onClick={() => setFilter('pending')} />
+                <TabButton text="Approved" active={filter === 'approved'} onClick={() => setFilter('approved')} />
+                <TabButton text="Rejected" active={filter === 'rejected'} onClick={() => setFilter('rejected')} />
+            </div>
 
-  return (
-    <div className="container mx-auto max-w-7xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">Leave Management</h1>
-      
-      {/* Message Box */}
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-semibold text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
+            {loading ? (
+                <LoadingSpinner />
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Days</th>
+                                {filter === 'pending' && <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredRequests.length > 0 ? filteredRequests.map(req => (
+                                <tr key={req._id} className={req.processing ? 'opacity-50' : ''}>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-gray-900">{req.employeeId?.fullName || 'N/A'}</div>
+                                        <div className="text-sm text-gray-500">{req.employeeId?.email || 'N/A'}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{req.leaveType}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {format(new Date(req.fromDate), 'MMM d, yyyy')} - {format(new Date(req.toDate), 'MMM d, yyyy')}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">{req.totalDays}</td>
+                                    {filter === 'pending' && (
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                            <button 
+                                                onClick={() => handleUpdateRequest(req._id, 'approved')} 
+                                                disabled={req.processing}
+                                                className="text-green-600 hover:text-green-900 transition-colors duration-200 mr-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Approve"
+                                            >
+                                                <CheckCircleIcon />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleUpdateRequest(req._id, 'rejected')} 
+                                                disabled={req.processing}
+                                                className="text-red-600 hover:text-red-900 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Reject"
+                                            >
+                                                <XCircleIcon />
+                                            </button>
+                                        </td>
+                                    )}
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No {filter} leave requests found.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
-      )}
-
-      {/* Form to Apply for Leave */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 mb-10">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Apply for Leave</h2>
-        <form onSubmit={handleCreate} className="space-y-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Leave Type</label>
-            <select
-              value={form.leaveType}
-              onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            >
-              <option value="sick">Sick Leave</option>
-              <option value="casual">Casual Leave</option>
-              <option value="vacation">Vacation</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">From Date</label>
-            <input
-              type="date"
-              value={form.fromDate}
-              onChange={(e) => setForm({ ...form, fromDate: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">To Date</label>
-            <input
-              type="date"
-              value={form.toDate}
-              onChange={(e) => setForm({ ...form, toDate: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-          <div className="md:col-span-3">
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-              Apply for Leave
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Table to Display Leave History */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">My Leave Requests</h2>
-        {loading ? (
-          <p className="text-center text-gray-500">Loading requests...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {leaves.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-500">
-                      No leave requests found.
-                    </td>
-                  </tr>
-                ) : (
-                  leaves.map((leave) => (
-                    <tr key={leave._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 capitalize">{leave.leaveType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold capitalize">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          leave.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          leave.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {leave.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(leave.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
-export default App;
+const TabButton = ({ text, active, onClick }) => {
+    const baseClasses = "px-4 py-2 text-sm font-medium rounded-t-lg focus:outline-none";
+    const activeClasses = "bg-blue-500 text-white";
+    const inactiveClasses = "text-gray-500 hover:bg-gray-100";
+
+    return (
+        <button onClick={onClick} className={`${baseClasses} ${active ? activeClasses : inactiveClasses}`}>
+            {text}
+        </button>
+    );
+};
+
+export default LeaveRequests;

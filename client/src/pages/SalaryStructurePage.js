@@ -1,289 +1,210 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    getSalaryStructures, 
+    createSalaryStructure, 
+    updateSalaryStructure, 
+    deleteSalaryStructure,
+    getDepartments 
+} from '../api/adminService';
 
-// Main App component to render the SalaryStructureManagement component
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <SalaryStructureManagement />
-    </div>
-  );
-}
+// --- Icon Components ---
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
+const LoadingSpinner = () => <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>;
 
-// Assume the user is an admin for this demo
-const mockAuthToken = "mock-jwt-token-for-admin";
-const mockDepartments = [
-  { _id: '60c72b2f9b1d8e001c8e4d3a', departmentName: 'Engineering' },
-  { _id: '60c72b2f9b1d8e001c8e4d3b', departmentName: 'Human Resources' },
-  { _id: '60c72b2f9b1d8e001c8e4d3c', departmentName: 'Marketing' },
-  { _id: '60c72b2f9b1d8e001c8e4d3d', departmentName: 'Sales' },
-];
+const SalaryStructurePage = () => {
+    const [structures, setStructures] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentStructure, setCurrentStructure] = useState(null); // For editing
 
-const SalaryStructureManagement = () => {
-  const [structures, setStructures] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({
-    role: 'employee',
-    position: '',
-    department: '',
-    basePay: 0,
-    hra: 0,
-    insurance: 0,
-    incentives: 0,
-  });
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [structuresData, departmentsData] = await Promise.all([
+                getSalaryStructures(),
+                getDepartments()
+            ]);
+            setStructures(structuresData);
+            setDepartments(departmentsData);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch data.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  // 1. Fetch all existing salary structures
-  const fetchStructures = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/salary-structures', {
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setStructures(data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch structures.');
-      }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-  useEffect(() => {
-    fetchStructures();
-  }, []);
+    const handleOpenModal = (structure = null) => {
+        setCurrentStructure(structure);
+        setIsModalOpen(true);
+    };
 
-  // 2. Handle form submission to create a new salary structure
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    setIsError(false);
-    setLoading(true);
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setCurrentStructure(null);
+    };
 
-    try {
-      const response = await fetch('/api/salary-structures', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-        body: JSON.stringify(form),
-      });
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this salary structure?')) {
+            try {
+                await deleteSalaryStructure(id);
+                fetchData(); // Refetch data after delete
+            } catch (err) {
+                setError(err.message || 'Failed to delete structure.');
+            }
+        }
+    };
 
-      const data = await response.json();
+    return (
+        <div className="p-4 bg-white rounded-xl shadow-md">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Salary Structures</h2>
+                <button
+                    onClick={() => handleOpenModal()}
+                    className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75"
+                >
+                    + Add New Structure
+                </button>
+            </div>
 
-      if (response.ok) {
-        setMessage('Salary structure created successfully!');
-        setIsError(false);
-        setForm({
-          role: 'employee',
-          position: '',
-          department: '',
-          basePay: 0,
-          hra: 0,
-          insurance: 0,
-          incentives: 0,
-        }); // Clear form
-        fetchStructures(); // Refresh the list
-      } else {
-        throw new Error(data.message || 'Failed to create structure.');
-      }
-    } catch (error) {
-      console.error('Create error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+            {error && <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">{error}</div>}
 
-  // 3. Handle deletion of a salary structure
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this salary structure?")) {
-      return;
-    }
+            {loading ? (
+                <LoadingSpinner />
+            ) : (
+                <SalaryStructureTable 
+                    structures={structures}
+                    onEdit={handleOpenModal}
+                    onDelete={handleDelete}
+                />
+            )}
 
-    setMessage('');
-    setIsError(false);
-
-    try {
-      const response = await fetch(`/api/salary-structures/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-
-      if (response.ok) {
-        setMessage('Salary structure deleted successfully!');
-        setIsError(false);
-        fetchStructures(); // Refresh the list
-      } else {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to delete structure.');
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    }
-  };
-
-  return (
-    <div className="container mx-auto max-w-5xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">Salary Structure Management</h1>
-      
-      {/* Message Box */}
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-semibold text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
+            {isModalOpen && (
+                <SalaryStructureFormModal
+                    structure={currentStructure}
+                    departments={departments}
+                    onClose={handleCloseModal}
+                    onSave={fetchData} // Refetch data after saving
+                />
+            )}
         </div>
-      )}
-
-      {/* Form to Create New Salary Structure */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 mb-10">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Create New Structure</h2>
-        <form onSubmit={handleCreate} className="space-y-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Role</label>
-            <select
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            >
-              <option value="employee">Employee</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Position</label>
-            <input
-              type="text"
-              value={form.position}
-              onChange={(e) => setForm({ ...form, position: e.target.value })}
-              placeholder="e.g., Senior Developer"
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Department</label>
-            <select
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            >
-              <option value="">Select Department</option>
-              {mockDepartments.map((dept) => (
-                <option key={dept._id} value={dept._id}>{dept.departmentName}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Base Pay</label>
-            <input
-              type="number"
-              value={form.basePay}
-              onChange={(e) => setForm({ ...form, basePay: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">HRA</label>
-            <input
-              type="number"
-              value={form.hra}
-              onChange={(e) => setForm({ ...form, hra: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Insurance</label>
-            <input
-              type="number"
-              value={form.insurance}
-              onChange={(e) => setForm({ ...form, insurance: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
-            >
-              {loading ? 'Creating...' : 'Create Structure'}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Table to Display Existing Salary Structures */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Existing Structures</h2>
-        {loading ? (
-          <p className="text-center text-gray-500">Loading structures...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Pay</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HRA</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Insurance</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {structures.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-500">
-                      No salary structures found.
-                    </td>
-                  </tr>
-                ) : (
-                  structures.map((structure) => (
-                    <tr key={structure._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 capitalize">{structure.role}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{structure.position}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {mockDepartments.find(d => d._id === structure.department)?.departmentName || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${structure.basePay}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${structure.hra}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${structure.insurance}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleDelete(structure._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
-export default App;
+// --- Sub-Components ---
+
+const SalaryStructureTable = ({ structures, onEdit, onDelete }) => (
+    <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+                <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Pay</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HRA</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Insurance</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                {structures.length > 0 ? structures.map(s => (
+                    <tr key={s._id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{s.position}</div>
+                            <div className="text-sm text-gray-500 capitalize">{s.role}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{s.department?.departmentName || 'N/A'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${s.basePay.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${s.hra.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${s.insurance.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <button onClick={() => onEdit(s)} className="text-indigo-600 hover:text-indigo-900 mr-4" title="Edit"><EditIcon /></button>
+                            <button onClick={() => onDelete(s._id)} className="text-red-600 hover:text-red-900" title="Delete"><DeleteIcon /></button>
+                        </td>
+                    </tr>
+                )) : (
+                    <tr><td colSpan="6" className="text-center py-4 text-gray-500">No salary structures found.</td></tr>
+                )}
+            </tbody>
+        </table>
+    </div>
+);
+
+const SalaryStructureFormModal = ({ structure, departments, onClose, onSave }) => {
+    const [formData, setFormData] = useState({
+        position: structure?.position || '',
+        role: structure?.role || 'employee',
+        department: structure?.department?._id || '',
+        basePay: structure?.basePay || '',
+        hra: structure?.hra || '',
+        insurance: structure?.insurance || '',
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState('');
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setFormError('');
+
+        try {
+            if (structure) {
+                await updateSalaryStructure(structure._id, formData);
+            } else {
+                await createSalaryStructure(formData);
+            }
+            onSave();
+            onClose();
+        } catch (err) {
+            setFormError(err.message || 'An error occurred.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">
+                <h3 className="text-xl font-bold mb-6">{structure ? 'Edit' : 'Add New'} Salary Structure</h3>
+                {formError && <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">{formError}</div>}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Form Fields */}
+                    <input type="text" name="position" value={formData.position} onChange={handleChange} placeholder="Position (e.g., Senior Developer)" required className="w-full p-2 border rounded"/>
+                    <select name="role" value={formData.role} onChange={handleChange} required className="w-full p-2 border rounded">
+                        <option value="employee">Employee</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <select name="department" value={formData.department} onChange={handleChange} required className="w-full p-2 border rounded">
+                        <option value="">Select Department</option>
+                        {departments.map(d => <option key={d._id} value={d._id}>{d.departmentName}</option>)}
+                    </select>
+                    <input type="number" name="basePay" value={formData.basePay} onChange={handleChange} placeholder="Base Pay" required className="w-full p-2 border rounded"/>
+                    <input type="number" name="hra" value={formData.hra} onChange={handleChange} placeholder="HRA" required className="w-full p-2 border rounded"/>
+                    <input type="number" name="insurance" value={formData.insurance} onChange={handleChange} placeholder="Insurance" required className="w-full p-2 border rounded"/>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex justify-end space-x-4 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300">
+                            {isSubmitting ? 'Saving...' : 'Save Structure'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default SalaryStructurePage;

@@ -1,10 +1,9 @@
-// models/Attendance.js
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
-    employeeId: {
+    employee: { // Renamed for clarity
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // References the User model for authentication
+        ref: 'User', // References the consolidated User model
         required: true,
     },
     date: {
@@ -20,5 +19,8 @@ const attendanceSchema = new mongoose.Schema({
         type: String,
     },
 }, { timestamps: true });
+
+// To prevent an employee from having two attendance records on the same day
+attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

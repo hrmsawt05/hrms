@@ -1,83 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getMyProfile } from '../api/employeeService';
+import { format } from 'date-fns';
 
-// Assuming mock data for demonstration purposes
-const mockUser = {
-  _id: 'emp1',
-  firstName: 'Cristiano',
-  lastName: 'Ronaldo',
-  email: 'ronaldo.doe@example.com',
-  employeeId: 'EMP001',
-  role: 'employee',
-  department: 'Engineering',
-  dateOfJoining: '2023-01-15',
-  experience: 2,
-  availableLeaves: 25,
-};
-
-// Main App component for demonstration
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <MyProfile />
+// --- UI Components ---
+const LoadingSpinner = () => (
+    <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-teal-500"></div>
     </div>
-  );
-}
+);
+
+const ErrorDisplay = ({ message }) => (
+    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert">
+        <p className="font-bold">Error</p>
+        <p>{message}</p>
+    </div>
+);
+
+const ProfileDetail = ({ label, value }) => (
+    <div className="py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+        <dt className="text-sm font-medium text-gray-500">{label}</dt>
+        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{value || 'N/A'}</dd>
+    </div>
+);
+
 
 const MyProfile = () => {
-  // This state would be populated with the logged-in user's data,
-  // likely fetched from the backend or stored in local storage.
-  const [user, setUser] = useState(mockUser); 
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-  return (
-    <div className="container mx-auto max-w-4xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">My Profile</h1>
-      
-      {/* Profile Card */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-        <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-8">
-          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-400">
-            <img 
-              src={`https://placehold.co/128x128/E0E7FF/4338CA?text=${user.firstName.charAt(0)}`} 
-              alt={`${user.firstName} ${user.lastName}`} 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="text-center md:text-left flex-1">
-            <h2 className="text-3xl font-bold text-gray-800">{user.firstName} {user.lastName}</h2>
-            <p className="text-xl text-gray-500 mt-1 capitalize">{user.role}</p>
-            <p className="text-sm text-gray-500 mt-2">{user.employeeId}</p>
-          </div>
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                setLoading(true);
+                const data = await getMyProfile();
+                setProfile(data);
+            } catch (err) {
+                setError(err.message || 'An unexpected error occurred.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProfile();
+    }, []);
+
+    if (loading) return <LoadingSpinner />;
+    if (error) return <ErrorDisplay message={error} />;
+    if (!profile) return <ErrorDisplay message="Could not load profile data." />;
+
+    return (
+        <div className="bg-white shadow-lg rounded-xl overflow-hidden">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 className="text-lg leading-6 font-bold text-gray-900">
+                    My Profile
+                </h3>
+                <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    Personal and employment details.
+                </p>
+            </div>
+            <div className="border-t border-gray-200">
+                <dl>
+                    <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                         <dt className="text-sm font-medium text-gray-500">Full Name</dt>
+                         <dd className="mt-1 text-sm font-bold text-gray-900 sm:mt-0 sm:col-span-2">{profile.fullName}</dd>
+                    </div>
+                    <ProfileDetail label="Email Address" value={profile.email} />
+                    <ProfileDetail label="Employee ID" value={profile.employeeIdString} />
+                    <ProfileDetail label="Position" value={profile.position} />
+                    <ProfileDetail label="Department" value={profile.department?.departmentName} />
+                    <ProfileDetail label="Role" value={profile.role} />
+                     <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                         <dt className="text-sm font-medium text-gray-500">Date of Joining</dt>
+                         <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {format(new Date(profile.dateOfJoining), 'MMMM d, yyyy')}
+                        </dd>
+                    </div>
+                    <ProfileDetail label="Available Leaves" value={`${profile.availableLeaves} days`} />
+                </dl>
+            </div>
         </div>
-      </div>
-      
-      {/* Details Table */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Employee Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-gray-700">
-          <div className="flex justify-between border-b pb-2">
-            <span className="font-semibold">Email:</span>
-            <span>{user.email}</span>
-          </div>
-          <div className="flex justify-between border-b pb-2">
-            <span className="font-semibold">Department:</span>
-            <span>{user.department}</span>
-          </div>
-          <div className="flex justify-between border-b pb-2">
-            <span className="font-semibold">Date of Joining:</span>
-            <span>{new Date(user.dateOfJoining).toLocaleDateString()}</span>
-          </div>
-          <div className="flex justify-between border-b pb-2">
-            <span className="font-semibold">Experience:</span>
-            <span>{user.experience} years</span>
-          </div>
-          <div className="flex justify-between border-b pb-2">
-            <span className="font-semibold">Available Leaves:</span>
-            <span className="font-bold text-blue-600">{user.availableLeaves}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
-export default App;
+export default MyProfile;

@@ -1,4 +1,3 @@
-// models/Leave.js
 const mongoose = require('mongoose');
 
 const leaveSchema = new mongoose.Schema({
@@ -6,9 +5,9 @@ const leaveSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    employeeId: {
+    employee: { // Renamed for clarity
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee',
+        ref: 'User', // References the consolidated User model
         required: true,
     },
     fromDate: {
@@ -24,13 +23,17 @@ const leaveSchema = new mongoose.Schema({
         enum: ['pending', 'approved', 'rejected'],
         default: 'pending',
     },
+    reason: { // Added a field for the employee to state their reason
+        type: String,
+        required: true
+    },
     rejectedReason: {
         type: String,
         default: null,
     },
     approvedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'User', // Approved by another User (an admin)
     },
 }, { timestamps: true });
 
