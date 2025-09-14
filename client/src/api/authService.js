@@ -1,7 +1,7 @@
 // The base URL for all API requests.
 // When you run the app, the proxy in your package.json will forward this
 // to your backend server at http://localhost:5000
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'https://hrms-sght.onrender.com/api';
 
 /**
  * Logs in a user by sending a POST request to the backend.
