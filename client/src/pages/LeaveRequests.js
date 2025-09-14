@@ -1,159 +1,178 @@
 import React, { useState, useEffect } from 'react';
+import { getLeaveRequests, updateLeaveRequestStatus, deleteLeaveRequest } from '../api/adminService';
+import { formatDate } from '../utils/dateUtils';
+import { CheckCircle, XCircle, Trash2, AlertTriangle } from 'lucide-react';
 
-// Assuming you have a mock auth token and user role for testing
-const mockAuthToken = "mock-jwt-token-for-admin";
-
-// Main App component for demonstration
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <LeaveRequests />
+// --- Modal Component ---
+const Modal = ({ children, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md relative animate-fadeInUp">
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-3xl font-light">&times;</button>
+            {children}
+        </div>
     </div>
-  );
-}
+);
+
 
 const LeaveRequests = () => {
-  const [leaves, setLeaves] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+    const [allRequests, setAllRequests] = useState([]);
+    const [filteredRequests, setFilteredRequests] = useState([]);
+    const [filter, setFilter] = useState('pending'); // Default filter
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-  // 1. Fetch all leave requests from the backend
-  const fetchLeaveRequests = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/leaves', {
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setLeaves(data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch leave requests.');
-      }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // --- State for Modals ---
+    const [requestToProcess, setRequestToProcess] = useState(null); // For approve/reject
+    const [requestToDelete, setRequestToDelete] = useState(null); // For delete confirmation
+    const [rejectedReason, setRejectedReason] = useState('');
 
-  useEffect(() => {
-    fetchLeaveRequests();
-  }, []);
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const data = await getLeaveRequests();
+            setAllRequests(data);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch leave requests.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  // 2. Handle updating a leave request status (Approve/Reject)
-  const handleUpdateStatus = async (id, status) => {
-    setMessage('');
-    setIsError(false);
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-    try {
-      const response = await fetch(`/api/leaves/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-        body: JSON.stringify({ status }),
-      });
+    useEffect(() => {
+        // This effect runs whenever the main list or the filter changes
+        const filtered = allRequests.filter(req => req.status === filter);
+        setFilteredRequests(filtered);
+    }, [allRequests, filter]);
 
-      const data = await response.json();
-      if (response.ok) {
-        setMessage(`Leave request ${status} successfully!`);
-        setIsError(false);
-        fetchLeaveRequests(); // Refresh the list
-      } else {
-        throw new Error(data.message || 'Failed to update leave status.');
-      }
-    } catch (error) {
-      console.error('Update error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    }
-  };
+    const handleUpdateStatus = async (status) => {
+        if (!requestToProcess) return;
 
-  return (
-    <div className="container mx-auto max-w-7xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">Leave Requests</h1>
-      
-      {/* Message Box */}
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-semibold text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
-        </div>
-      )}
+        try {
+            const statusData = { status };
+            if (status === 'rejected') {
+                statusData.rejectedReason = rejectedReason || 'No reason provided.';
+            }
 
-      {/* Table to Display Leave Requests */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Pending Requests</h2>
-        {loading ? (
-          <p className="text-center text-gray-500">Loading requests...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {leaves.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-500">
-                      No leave requests found.
-                    </td>
-                  </tr>
-                ) : (
-                  leaves.map((leave) => (
-                    <tr key={leave._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{leave.employeeId.name || leave.employeeId.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{leave.leaveType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold capitalize">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          leave.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          leave.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {leave.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {leave.status === 'pending' && (
-                          <div className="flex justify-end space-x-2">
-                            <button
-                              onClick={() => handleUpdateStatus(leave._id, 'approved')}
-                              className="text-green-600 hover:text-green-900 transition-colors duration-200"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block text-xl"><path d="M20 6 9 17l-5-5"/></svg>
-                            </button>
-                            <button
-                              onClick={() => handleUpdateStatus(leave._id, 'rejected')}
-                              className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block text-xl"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                            </button>
-                          </div>
+            await updateLeaveRequestStatus(requestToProcess._id, statusData);
+            setRequestToProcess(null);
+            setRejectedReason('');
+            await fetchData(); // Refresh data
+        } catch (err) {
+            setError(err.message || `Failed to ${status} request.`);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!requestToDelete) return;
+        try {
+            await deleteLeaveRequest(requestToDelete._id);
+            setRequestToDelete(null);
+            await fetchData(); // Refresh data
+        } catch (err) {
+            setError(err.message || 'Failed to delete request.');
+        }
+    };
+
+    const FilterButton = ({ value, label }) => (
+        <button
+            onClick={() => setFilter(value)}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                filter === value 
+                ? 'bg-blue-600 text-white shadow-md' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+        >
+            {label}
+        </button>
+    );
+
+    if (loading) return <div>Loading requests...</div>;
+    if (error) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>;
+
+    return (
+        <div className="animate-fadeIn">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Leave Approvals</h2>
+
+            <div className="flex space-x-4 mb-6">
+                <FilterButton value="pending" label="Pending" />
+                <FilterButton value="approved" label="Approved" />
+                <FilterButton value="rejected" label="Rejected" />
+            </div>
+
+            <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Days</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredRequests.length > 0 ? filteredRequests.map(req => (
+                            <tr key={req._id}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{req.employeeId?.firstName || 'N/A'} {req.employeeId?.lastName || ''}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{req.leaveType}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(req.fromDate)} - {formatDate(req.toDate)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{req.numberOfDays}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                    {filter === 'pending' && (
+                                        <>
+                                            <button onClick={() => setRequestToProcess(req)} className="text-green-600 hover:text-green-900"><CheckCircle size={20} /></button>
+                                            <button onClick={() => setRequestToDelete(req)} className="text-red-600 hover:text-red-900"><Trash2 size={20} /></button>
+                                        </>
+                                    )}
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="text-center py-10 text-gray-500">No {filter} requests found.</td>
+                            </tr>
                         )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Approve/Reject Modal */}
+            {requestToProcess && (
+                <Modal onClose={() => setRequestToProcess(null)}>
+                    <h3 className="text-2xl font-bold mb-4">Process Leave Request</h3>
+                    <p className="mb-4">Are you sure you want to approve this request? To reject, please provide a reason.</p>
+                    <textarea 
+                        value={rejectedReason}
+                        onChange={(e) => setRejectedReason(e.target.value)}
+                        placeholder="Optional: Reason for rejection..."
+                        className="w-full p-2 border border-gray-300 rounded-md mb-4"
+                    />
+                    <div className="flex justify-end space-x-4">
+                        <button onClick={() => handleUpdateStatus('rejected')} className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Reject</button>
+                        <button onClick={() => handleUpdateStatus('approved')} className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Approve</button>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {requestToDelete && (
+                <Modal onClose={() => setRequestToDelete(null)}>
+                     <div className="text-center">
+                        <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
+                        <h3 className="text-2xl font-bold mt-4">Delete Request</h3>
+                        <p className="text-gray-600 mt-2">Are you sure you want to delete this leave request? This action cannot be undone.</p>
+                        <div className="flex justify-center space-x-4 mt-6">
+                            <button onClick={() => setRequestToDelete(null)} className="bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-400">Cancel</button>
+                            <button onClick={handleDelete} className="bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700">Delete</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+        </div>
+    );
 };
 
-export default App;
+export default LeaveRequests;

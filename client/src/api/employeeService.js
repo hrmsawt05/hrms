@@ -1,109 +1,90 @@
-// src/api/employeeService.js
+// This file holds all API calls for the employee/faculty dashboard.
 
-/**
- * Fetches the currently logged-in user's profile data.
- * The token from localStorage will be sent automatically by the AuthContext.
- * @returns {Promise<object>} The user's profile data.
- */
-export const getMyProfile = async () => {
-    const token = localStorage.getItem('token');
-    // The employeeId is derived from the token on the backend, so we don't need to send it.
-    // We assume an endpoint like `/api/employees/profile/me` exists for this.
-    const response = await fetch('/api/employees/profile/me', {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
+const getToken = () => localStorage.getItem('token');
 
+// --- Helper for API calls to keep our code DRY (Don't Repeat Yourself) ---
+const apiCall = async (url, options = {}) => {
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`,
+    };
+    const config = {
+        ...options,
+        headers: { ...defaultHeaders, ...options.headers },
+    };
+    const response = await fetch(url, config);
     if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch profile.');
+        try {
+            const data = await response.json();
+            throw new Error(data.message || `Request failed with status ${response.status}`);
+        } catch (e) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
     }
-    return response.json();
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+        return response.json();
+    }
+    return {};
 };
 
+
+// --- Profile ---
+export const getMyProfile = () => apiCall('/api/employees/profile/me');
+export const updateMyProfile = (userData) => apiCall('/api/employees/profile/me', {
+    method: 'PUT',
+    body: JSON.stringify(userData),
+});
+export const changeMyPassword = (passwordData) => apiCall('/api/employees/profile/change-password', {
+    method: 'PUT',
+    body: JSON.stringify(passwordData),
+});
+
+
+// --- Leave ---
+export const getMyLeaveRequests = () => apiCall('/api/leaves/my-requests');
+export const createLeaveRequest = (leaveData) => apiCall('/api/leaves/apply', {
+    method: 'POST',
+    body: JSON.stringify(leaveData),
+});
+export const getLeaveSummary = () => apiCall('/api/leaves/my-summary');
+
+
+// ---  Attendance Time Clock Functions ---
 /**
- * Fetches all leave requests for the currently logged-in user.
- * @returns {Promise<array>} A list of the user's leave requests.
+ * Employee clocks in for the day.
+ * @returns {Promise<object>}
  */
-export const getMyLeaveRequests = async () => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/leaves/my-leaves', {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch leave requests.');
-    }
-    return response.json();
-};
-
-/**
- * Submits a new leave request for the currently logged-in user.
- * @param {object} leaveData - The details of the leave request.
- * @returns {Promise<object>} The newly created leave request object.
- */
-export const createLeaveRequest = async (leaveData) => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/leaves', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(leaveData),
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to submit leave request.');
-    }
-    return response.json();
-};
+export const clockIn = () => apiCall('/api/attendance/clockin', { method: 'POST' });
 
 /**
- * Marks the current user's attendance for today.
- * @returns {Promise<object>} The attendance record for today.
+ * Employee clocks out for the day.
+ * @returns {Promise<object>}
  */
-export const markMyAttendance = async () => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/attendance/me', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to mark attendance.');
-    }
-    return response.json();
-};
+export const clockOut = () => apiCall('/api/attendance/clockout', { method: 'POST' });
 
 /**
- * Fetches all salary records for the currently logged-in user.
- * @returns {Promise<array>} A list of salary records.
+ * Fetches all attendance records for the currently logged-in user.
+ * @returns {Promise<array>}
  */
-export const getMySalaryRecords = async () => {
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user) {
-        throw new Error('User not found in local storage.');
-    }
+export const getMyAttendanceRecords = () => apiCall('/api/attendance/my-records');
 
-    const response = await fetch(`/api/salaries/employee/${user.id}`, {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch salary records.');
-    }
-    return response.json();
-};
+// --- Salary ---
+export const getMySalaryRecords = () => apiCall('/api/salaries/my-records');
+
+
+// --- To-Do List (Notice Board) Functions ---
+export const getTodos = () => apiCall('/api/todos');
+export const createTodo = (taskData) => apiCall('/api/todos', {
+    method: 'POST',
+    body: JSON.stringify(taskData),
+});
+export const updateTodo = (todoId, updateData) => apiCall(`/api/todos/${todoId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updateData),
+});
+export const deleteTodo = (todoId) => apiCall(`/api/todos/${todoId}`, {
+    method: 'DELETE',
+});
+

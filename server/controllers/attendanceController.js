@@ -1,103 +1,125 @@
 const Attendance = require('../models/Attendance');
 
-// Helper to get the start of a given date (to ignore time)
-const getStartOfDay = (date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
+// Helper to get the start of the day in UTC to avoid timezone issues
+const getStartOfDayUTC = (date) => {
+    const start = new Date(date);
+    start.setUTCHours(0, 0, 0, 0);
+    return start;
 };
 
-// @desc    An Employee marks their OWN attendance for today
-// @route   POST /api/attendance/mark
-// @access  Private/Employee
-const markMyAttendance = async (req, res) => {
+/**
+ * @desc    Employee/Faculty clocks in for the day
+ * @route   POST /api/attendance/clockin
+ * @access  Private (Employee)
+ */
+const clockIn = async (req, res) => {
     try {
-        const { status, notes } = req.body;
+        const today = getStartOfDayUTC(new Date());
         const employeeId = req.user._id;
 
-        const today = getStartOfDay(new Date());
+        // Check if already clocked in today to prevent duplicates
+        const existingRecord = await Attendance.findOne({ employeeId, date: today });
+        if (existingRecord) {
+            return res.status(400).json({ message: 'You have already clocked in for today.' });
+        }
 
-        // Find a record for this employee for today and update it, OR create it if it doesn't exist.
-        // This is an "upsert" operation and prevents duplicate entries.
-        const attendance = await Attendance.findOneAndUpdate(
-            {
-                employeeId: employeeId,
-                date: today,
-            },
-            {
-                $set: {
-                    status,
-                    notes,
-                    employeeId
-                },
-            },
-            { new: true, upsert: true, runValidators: true }
-        );
+        const newRecord = await Attendance.create({
+            employeeId,
+            date: today,
+            loginTime: new Date(), // Set the current time as login time
+            status: 'in-progress', // The day is in progress
+        });
 
-        res.status(201).json({ message: "Attendance for today has been recorded.", attendance });
-    } catch (error) {
-        console.error('Mark attendance error:', error);
-        res.status(500).json({ message: "Server error while marking attendance." });
+        res.status(201).json({ message: 'Successfully clocked in for the day.', record: newRecord });
+
+    } catch (err) {
+        console.error("Clock-in error:", err);
+        res.status(500).json({ message: 'Server error during clock-in.' });
     }
 };
 
-
-// @desc    An Admin logs or updates attendance for any employee on any date
-// @route   POST /api/attendance/admin/log
-// @access  Private/Admin
-const adminLogOrUpdateAttendance = async (req, res) => {
+/**
+ * @desc    Employee/Faculty clocks out for the day
+ * @route   POST /api/attendance/clockout
+ * @access  Private (Employee)
+ */
+const clockOut = async (req, res) => {
     try {
-        const { employeeId, date, status, notes } = req.body;
+        const today = getStartOfDayUTC(new Date());
+        const employeeId = req.user._id;
 
-        const targetDate = getStartOfDay(date);
+        const record = await Attendance.findOne({ employeeId, date: today });
+        if (!record) {
+            return res.status(404).json({ message: "Cannot clock out because you haven't clocked in today." });
+        }
+        if (record.logoutTime) {
+            return res.status(400).json({ message: 'You have already clocked out for today.' });
+        }
 
-        const attendance = await Attendance.findOneAndUpdate(
-            { employeeId, date: targetDate },
-            { $set: { status, notes, employeeId } },
-            { new: true, upsert: true, runValidators: true }
-        );
+        const logoutTime = new Date();
+        record.logoutTime = logoutTime;
 
-        res.status(201).json({ message: "Attendance record has been saved.", attendance });
-    } catch (error) {
-        console.error('Admin log attendance error:', error);
-        res.status(500).json({ message: "Server error while logging attendance." });
+        // --- Your College's Business Logic for Status ---
+        const logoutHour = logoutTime.getHours(); // Based on server time (should be set to IST)
+        if (logoutHour < 12) { // Before 12:00 PM
+            record.status = 'absent';
+            record.notes = 'Logged out before noon.';
+        } else if (logoutHour < 16) { // Between 12:00 PM and 4:00 PM (16:00)
+            record.status = 'half-day';
+            record.notes = 'Logged out after noon.';
+        } else { // 4:00 PM or later
+            record.status = 'present';
+            record.notes = 'Completed full day.';
+        }
+        
+        await record.save();
+
+        res.status(200).json({ message: 'Successfully clocked out. Your status for today is now recorded.', record });
+
+    } catch (err) {
+        console.error("Clock-out error:", err);
+        res.status(500).json({ message: 'Server error during clock-out.' });
     }
 };
 
-// @desc    Get the current logged-in user's attendance records
-// @route   GET /api/attendance/my-records
-// @access  Private/Employee
+
+/**
+ * @desc    An employee gets their own attendance records
+ * @route   GET /api/attendance/my-records
+ * @access  Private (Employee)
+ */
 const getMyAttendanceRecords = async (req, res) => {
     try {
-        const attendanceRecords = await Attendance.find({ employeeId: req.user._id }).sort({ date: -1 });
-        res.status(200).json(attendanceRecords);
+        const records = await Attendance.find({ employeeId: req.user._id }).sort({ date: -1 });
+        res.status(200).json(records);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Get my attendance error:", error);
+        res.status(500).json({ message: "Server error." });
     }
 };
 
 
-// @desc    Get attendance for a specific employee (Admin view)
-// @route   GET /api/attendance/employee/:employeeId
-// @access  Private/Admin
+/**
+ * @desc    Admin gets all attendance records for a specific employee
+ * @route   GET /api/attendance/admin/employee/:employeeId
+ * @access  Private (Admin)
+ */
 const getEmployeeAttendanceForAdmin = async (req, res) => {
     try {
         const { employeeId } = req.params;
-        const attendanceRecords = await Attendance.find({ employeeId }).sort({ date: -1 });
-
-        if (!attendanceRecords || attendanceRecords.length === 0) {
-            return res.status(404).json({ message: 'No attendance records found for this user.' });
-        }
-
-        res.status(200).json(attendanceRecords);
+        const records = await Attendance.find({ employeeId }).populate('employeeId', 'firstName lastName').sort({ date: -1 });
+        res.status(200).json(records);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Admin get employee attendance error:", error);
+        res.status(500).json({ message: "Server error." });
     }
 };
 
+
 module.exports = {
-    markMyAttendance,
-    adminLogOrUpdateAttendance,
+    clockIn,
+    clockOut,
     getMyAttendanceRecords,
-    getEmployeeAttendanceForAdmin
+    getEmployeeAttendanceForAdmin,
 };
+

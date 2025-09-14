@@ -1,12 +1,19 @@
+/* Import Tailwind CSS base styles, components, and utilities */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
+/* Ensure the app takes full height of the viewport */
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Optional: A nice default background color for the entire app */
+body {
+  background-color: #f0f2f5; /* A light grey, similar to Facebook's background */
 }

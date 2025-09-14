@@ -1,58 +1,37 @@
 const mongoose = require('mongoose');
 
 const salarySchema = new mongoose.Schema({
-    employee: { // Renamed for clarity
+    employeeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // References the consolidated User model
+        ref: 'User',
         required: true,
     },
-    basePay: {
-        type: Number,
-        required: true,
-    },
-    hra: { // House Rent Allowance
-        type: Number,
-        default: 0,
-    },
-    insurance: {
-        type: Number,
-        default: 0,
-    },
-    incentives: {
-        type: Number,
-        default: 0,
-    },
-    deductions: { // Added for things like unpaid leave
-        type: Number,
-        default: 0
-    },
-    netSalary: {
-        type: Number,
-        // This will be calculated automatically by the pre-save hook
-    },
-    month: {
-        type: Number,
-        required: true,
-        min: 1,
-        max: 12
-    },
-    year: {
-        type: Number,
-        required: true,
-    },
-    calculatedDate: {
-        type: Date,
-        default: Date.now,
-    },
-}, { timestamps: true });
+    month: { type: Number, required: true, min: 1, max: 12 },
+    year: { type: Number, required: true },
+    
+    // --- Components from Salary Structure ---
+    basePay: { type: Number, required: true },
+    hra: { type: Number, default: 0 },
+    insurance: { type: Number, default: 0 },
+    incentives: { type: Number, default: 0 },
 
+    
+    daysInMonth: { type: Number, required: true },
+    daysPresent: { type: Number, required: true },
+    daysOnLeave: { type: Number, required: true }, // Paid leave
+    daysAbsent: { type: Number, required: true }, // Unpaid absence
+    
+    perDaySalary: { type: Number, required: true },
+    deductions: { type: Number, default: 0 }, // Total deductions for unpaid days
 
-// Pre-save hook to calculate netSalary automatically
-salarySchema.pre('save', function(next) {
-    if (this.isModified('basePay') || this.isModified('hra') || this.isModified('insurance') || this.isModified('incentives') || this.isModified('deductions')) {
-        this.netSalary = (this.basePay + this.hra + this.incentives) - (this.insurance + this.deductions);
-    }
-    next();
-});
+    // --- Final Calculated Salary ---
+    netSalary: { type: Number, required: true },
+
+}, { timestamps: true }); // createdAt will be our 'generatedDate'
+
+// Ensure a user can only have one salary record per month/year
+salarySchema.index({ employeeId: 1, month: 1, year: 1 }, { unique: true });
+
 
 module.exports = mongoose.model('Salary', salarySchema);
+

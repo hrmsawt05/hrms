@@ -1,40 +1,67 @@
-// This file will hold all API calls for the admin dashboard.
+// This file holds all API calls for the admin dashboard.
 
 const getToken = () => localStorage.getItem('token');
-const getAuthHeaders = () => {
-    return {
+
+// --- Helper for API calls ---
+const apiCall = async (url, options = {}) => {
+    //
+    const defaultHeaders = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${getToken()}`,
     };
-};
 
-// --- Helper for API calls ---
-const apiCall = async (url, options) => {
-    const response = await fetch(url, options);
+    const config = {
+        ...options,
+        headers: {
+            ...defaultHeaders,
+            ...options.headers,
+        },
+    };
+
+    const response = await fetch(url, config);
+
     if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || `Request failed with status ${response.status}`);
+        // Try to parse error message from the backend, otherwise use default
+        try {
+            const data = await response.json();
+            throw new Error(data.message || `Request failed with status ${response.status}`);
+        } catch (e) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
     }
+
     // Handle cases where the response body might be empty (e.g., DELETE requests)
     const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
+    if (contentType && contentType.includes("application/json")) {
         return response.json();
     }
-    return {}; // Return empty object for non-JSON responses
+    return {}; // Return empty object for non-JSON or empty responses
 };
 
 
-// --- User/Employee Management ---
+// --- User/Faculty & Staff Management ---
 
 export const getAllUsers = () => {
-    return apiCall('/api/employees', { headers: getAuthHeaders() });
+    return apiCall('/api/employees');
 };
 
 export const createUser = (userData) => {
     return apiCall('/api/employees', {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify(userData),
+    });
+};
+
+export const updateUser = (userId, userData) => {
+    return apiCall(`/api/employees/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify(userData),
+    });
+};
+
+export const deleteUser = (userId) => {
+    return apiCall(`/api/employees/${userId}`, {
+        method: 'DELETE',
     });
 };
 
@@ -42,21 +69,51 @@ export const createUser = (userData) => {
 // --- Department Management ---
 
 export const getDepartments = () => {
-    return apiCall('/api/departments', { headers: getAuthHeaders() });
+    return apiCall('/api/departments');
+};
+
+export const createDepartment = (departmentData) => {
+    return apiCall('/api/departments', {
+        method: 'POST',
+        body: JSON.stringify(departmentData),
+    });
+};
+
+export const updateDepartment = (id, departmentData) => {
+    return apiCall(`/api/departments/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(departmentData),
+    });
+};
+
+export const deleteDepartment = (id) => {
+    return apiCall(`/api/departments/${id}`, {
+        method: 'DELETE',
+    });
 };
 
 
 // --- Leave Management ---
 
 export const getLeaveRequests = () => {
-    return apiCall('/api/leaves', { headers: getAuthHeaders() });
+    return apiCall('/api/leaves');
 };
 
 export const updateLeaveRequestStatus = (leaveId, statusData) => {
     return apiCall(`/api/leaves/${leaveId}`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
         body: JSON.stringify(statusData),
+    });
+};
+
+/**
+ *  Deletes a leave request from the system.
+ * @param {string} leaveId - The ID of the leave request to delete.
+ * @returns {Promise<object>} A success message.
+ */
+export const deleteLeaveRequest = (leaveId) => {
+    return apiCall(`/api/leaves/${leaveId}`, {
+        method: 'DELETE',
     });
 };
 
@@ -64,13 +121,12 @@ export const updateLeaveRequestStatus = (leaveId, statusData) => {
 // --- Salary Structure Management ---
 
 export const getSalaryStructures = () => {
-    return apiCall('/api/salary-structures', { headers: getAuthHeaders() });
+    return apiCall('/api/salary-structures');
 };
 
 export const createSalaryStructure = (structureData) => {
     return apiCall('/api/salary-structures', {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify(structureData),
     });
 };
@@ -78,7 +134,6 @@ export const createSalaryStructure = (structureData) => {
 export const updateSalaryStructure = (structureId, structureData) => {
     return apiCall(`/api/salary-structures/${structureId}`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
         body: JSON.stringify(structureData),
     });
 };
@@ -86,7 +141,6 @@ export const updateSalaryStructure = (structureId, structureData) => {
 export const deleteSalaryStructure = (structureId) => {
     return apiCall(`/api/salary-structures/${structureId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders(),
     });
 };
 
@@ -96,12 +150,17 @@ export const deleteSalaryStructure = (structureId) => {
 export const createSalaryRecord = (recordData) => {
     return apiCall('/api/salaries', {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify(recordData),
     });
 };
 
 export const getAllSalaryRecords = () => {
-    return apiCall('/api/salaries', { headers: getAuthHeaders() });
+    return apiCall('/api/salaries');
+};
+
+// --- Admin Attendance Viewer ---
+
+export const getAttendanceForEmployee = (employeeId) => {
+    return apiCall(`/api/attendance/admin/employee/${employeeId}`);
 };
 

@@ -1,107 +1,140 @@
 import React, { useState, useEffect } from 'react';
-
-// Assuming mock data for demonstration purposes
-const mockAuthToken = "mock-jwt-token-for-employee";
-const mockUserId = "emp1"; // This would come from the logged-in user object
-
-// Main App component for demonstration
-function App() {
-  return (
-    <div className="bg-gray-100 min-h-screen p-8 font-sans">
-      <MySalary />
-    </div>
-  );
-}
+import { getMySalaryRecords } from '../api/employeeService';
+import { useAuth } from '../context/AuthContext';
+import { DollarSign } from 'lucide-react'; 
 
 const MySalary = () => {
-  const [salaries, setSalaries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
+    const [records, setRecords] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const { user } = useAuth();
 
-  // 1. Fetch the logged-in employee's salary history
-  const fetchMySalaries = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/salaries/employee/${mockUserId}`, {
-        headers: {
-          'Authorization': `Bearer ${mockAuthToken}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSalaries(data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch salary records.');
-      }
-    } catch (error) {
-      console.error('Fetch error:', error);
-      setMessage(error.message);
-      setIsError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+    useEffect(() => {
+        const fetchRecords = async () => {
+            try {
+                const data = await getMySalaryRecords();
+                setRecords(data);
+            } catch (err) {
+                setError(err.message || 'Failed to fetch salary records.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchRecords();
+    }, []);
 
-  useEffect(() => {
-    fetchMySalaries();
-  }, []);
+    if (loading) return <div>Loading your salary history...</div>;
+    if (error) return <div className="text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>;
 
-  return (
-    <div className="container mx-auto max-w-7xl">
-      <h1 className="text-4xl font-bold text-gray-800 text-center mb-10">My Salary</h1>
-      
-      {/* Message Box */}
-      {message && (
-        <div className={`p-4 mb-6 rounded-xl font-semibold text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message}
+    return (
+        <div className="animate-fadeIn">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">My Payslips</h2>
+            
+            {records.length > 0 ? (
+                <div className="space-y-8">
+                    {records.map(rec => (
+                        <Payslip key={rec._id} record={rec} user={user} />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-lg">
+                    <DollarSign size={48} className="mx-auto text-gray-400" />
+                    <p className="mt-4">No salary records have been generated for you yet.</p>
+                </div>
+            )}
         </div>
-      )}
-
-      {/* Table to Display Salary History */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Salary History</h2>
-        {loading ? (
-          <p className="text-center text-gray-500">Loading salary records...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Pay</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Salary</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Created</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {salaries.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-500">
-                      No salary records found.
-                    </td>
-                  </tr>
-                ) : (
-                  salaries.map((salary) => (
-                    <tr key={salary._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{salary.month}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{salary.year}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${salary.basePay}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">${salary.netSalary}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(salary.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
-export default App;
+
+// --- Payslip Component for a professional look ---
+const Payslip = ({ record, user }) => {
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const earnings = record.basePay + record.hra + record.incentives;
+    const totalDeductions = record.insurance + record.deductions;
+
+    // Helper to format numbers as Indian Rupees
+    const formatToINR = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+            <div className="bg-gray-50 p-4 border-b">
+                <h3 className="text-xl font-bold text-gray-800">Payslip for {monthNames[record.month - 1]} {record.year}</h3>
+                <p className="text-sm text-gray-500">Generated on: {new Date(record.createdAt).toLocaleDateString()}</p>
+            </div>
+            
+            <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                        <p className="text-sm text-gray-500">Faculty Name</p>
+                        
+                        <p className="font-semibold">{`${user?.firstName || ''} ${user?.lastName || ''}`}</p>
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500">Position</p>
+                        <p className="font-semibold">{user?.position}</p>
+                    </div>
+                     <div>
+                        <p className="text-sm text-gray-500">Days in Month</p>
+                        <p className="font-semibold">{record.daysInMonth}</p>
+                    </div>
+                </div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 text-center">
+                    <div className="bg-green-50 p-4 rounded-lg">
+                        <p className="text-sm text-green-700">Present</p>
+                        <p className="font-bold text-2xl text-green-800">{record.daysPresent}</p>
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                        <p className="text-sm text-blue-700">On Leave (Paid)</p>
+                        <p className="font-bold text-2xl text-blue-800">{record.daysOnLeave}</p>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-lg">
+                        <p className="text-sm text-red-700">Absent (Unpaid)</p>
+                        <p className="font-bold text-2xl text-red-800">{record.daysAbsent}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* --- Earnings Side --- */}
+                    <div>
+                        <h4 className="font-bold text-lg text-gray-700 mb-2 border-b pb-2">Earnings</h4>
+                        <div className="space-y-2 text-sm">
+                            
+                            <div className="flex justify-between"><span>Base Pay:</span> <span>{formatToINR(record.basePay)}</span></div>
+                            <div className="flex justify-between"><span>HRA:</span> <span>{formatToINR(record.hra)}</span></div>
+                            <div className="flex justify-between"><span>Incentives:</span> <span>{formatToINR(record.incentives)}</span></div>
+                            <div className="flex justify-between font-bold border-t pt-2 mt-2"><span>Total Earnings:</span> <span>{formatToINR(earnings)}</span></div>
+                        </div>
+                    </div>
+                    {/* --- Deductions Side --- */}
+                    <div>
+                        <h4 className="font-bold text-lg text-gray-700 mb-2 border-b pb-2">Deductions</h4>
+                        <div className="space-y-2 text-sm">
+                             
+                            <div className="flex justify-between"><span>Insurance:</span> <span>{formatToINR(record.insurance)}</span></div>
+                            <div className="flex justify-between"><span>Unpaid Absences:</span> <span className="text-red-600">-{formatToINR(record.deductions)}</span></div>
+                            <div className="flex justify-between font-bold border-t pt-2 mt-2"><span>Total Deductions:</span> <span>-{formatToINR(totalDeductions)}</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gray-100 p-4 rounded-lg mt-6 text-center">
+                    <p className="text-lg font-bold text-gray-800">Net Salary Paid</p>
+                     
+                    <p className="text-3xl font-extrabold text-green-600">{formatToINR(record.netSalary)}</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default MySalary;
+

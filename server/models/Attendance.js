@@ -1,26 +1,36 @@
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
-    employee: { // Renamed for clarity
+    employeeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // References the consolidated User model
+        ref: 'User',
         required: true,
     },
     date: {
         type: Date,
         required: true,
     },
+    
+    loginTime: {
+        type: Date,
+    },
+    logoutTime: {
+        type: Date,
+    },
     status: {
         type: String,
-        enum: ['present', 'absent', 'half-day', 'on-leave'], // Defines valid attendance statuses
+        enum: ['present', 'absent', 'half-day', 'on-leave', 'in-progress'],
         required: true,
+        default: 'in-progress', // Default status when clocked in
     },
     notes: {
         type: String,
+        trim: true,
     },
 }, { timestamps: true });
 
-// To prevent an employee from having two attendance records on the same day
-attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
+// Ensure an employee can only have one record per day
+attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
+

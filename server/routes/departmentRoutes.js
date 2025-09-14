@@ -1,11 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { getAllDepartments } = require('../controllers/departmentController');
+const { createDepartment, getAllDepartments } = require('../controllers/departmentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-// An admin needs to fetch the list of departments to create a new employee,
-// so this route is protected for admins.
-router.get('/', authMiddleware, roleMiddleware(['admin']), getAllDepartments);
+// @desc    Admin creates a new department
+// @route   POST /api/departments
+// @access  Private/Admin
+router.post('/', authMiddleware, roleMiddleware(['admin']), createDepartment);
+//router.post('/', createDepartment);// Temporarily disabled auth for testing
+// @desc    Any authenticated user can get the list of departments
+// @route   GET /api/departments
+// @access  Private
+router.get('/', authMiddleware, getAllDepartments);
 
 module.exports = router;
+

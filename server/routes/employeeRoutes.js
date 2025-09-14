@@ -1,33 +1,47 @@
 const express = require('express');
 const router = express.Router();
 
+// Import all necessary functions from the controller
 const { 
     createUser, 
     getAllUsers, 
     getUserById,
-    getMyProfile 
+    updateUser,
+    deleteUser,
+    getMyProfile,
+    updateMyProfile,
+    changeMyPassword
 } = require('../controllers/employeeController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-// @route   POST /api/employees
-// @desc    Admin creates a new user/employee
+// --- Admin CRUD Routes for Managing All Users ---
 
+// Create a new user
 router.post('/', authMiddleware, roleMiddleware(['admin']), createUser);
 
-// @route   GET /api/employees
-// @desc    Admin gets all users
+// Get all users
 router.get('/', authMiddleware, roleMiddleware(['admin']), getAllUsers);
 
-// @route   GET /api/employees/profile/me
-// @desc    A logged-in user gets their own profile
+// Get, Update, and Delete a single user by ID using router.route() for cleaner code
+router.route('/:id')
+    .get(authMiddleware, roleMiddleware(['admin']), getUserById)
+    .put(authMiddleware, roleMiddleware(['admin']), updateUser)
+    .delete(authMiddleware, roleMiddleware(['admin']), deleteUser);
 
+
+// --- Faculty/Employee Self-Service Routes ---
+
+// Get the logged-in user's own profile
 router.get('/profile/me', authMiddleware, getMyProfile);
 
-// @route   GET /api/employees/:id
-// @desc    Get a single user by their ID
-// Note: This general route comes AFTER the more specific '/profile/me' route
-router.get('/:id', authMiddleware, getUserById);
+// Update the logged-in user's own profile
+router.put('/profile/me', authMiddleware, updateMyProfile);
+
+// Change the logged-in user's password
+router.put('/profile/change-password', authMiddleware, changeMyPassword);
+
 
 module.exports = router;
 

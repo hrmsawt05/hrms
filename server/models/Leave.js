@@ -1,31 +1,41 @@
 const mongoose = require('mongoose');
 
 const leaveSchema = new mongoose.Schema({
+    
+    employeeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
     leaveType: {
         type: String,
+        enum: ['Sick Leave', 'Casual Leave', 'Earned Leave', 'Conference', 'Exam Duty'],
         required: true,
     },
-    employee: { // Renamed for clarity
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // References the consolidated User model
-        required: true,
+    fromDate: { 
+        type: Date, 
+        required: true 
     },
-    fromDate: {
-        type: Date,
-        required: true,
+    toDate: { 
+        type: Date, 
+        required: true 
     },
-    toDate: {
-        type: Date,
+    
+    reason: {
+        type: String,
         required: true,
+        trim: true,
+        maxlength: 500
+    },
+    // This will be calculated on the backend
+    numberOfDays: {
+        type: Number,
+        required: true
     },
     status: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],
         default: 'pending',
-    },
-    reason: { // Added a field for the employee to state their reason
-        type: String,
-        required: true
     },
     rejectedReason: {
         type: String,
@@ -33,8 +43,9 @@ const leaveSchema = new mongoose.Schema({
     },
     approvedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // Approved by another User (an admin)
+        ref: 'User',
     },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Leave', leaveSchema);
+

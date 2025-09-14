@@ -1,33 +1,35 @@
 const express = require('express');
 const router = express.Router();
+
 const {
-    markMyAttendance,
-    adminLogOrUpdateAttendance,
+    clockIn,
+    clockOut,
     getMyAttendanceRecords,
     getEmployeeAttendanceForAdmin
 } = require('../controllers/attendanceController');
 const authMiddleware = require('../middleware/authMiddleware');
 const roleMiddleware = require('../middleware/roleMiddleware');
 
-// --- Employee Routes ---
+// --- Employee/Faculty Routes ---
 
-// @desc    An employee marks their own attendance for today
-// @route   POST /api/attendance/mark
-router.post('/mark', authMiddleware, roleMiddleware(['employee']), markMyAttendance);
+// @desc    An employee clocks in for the day
+// @route   POST /api/attendance/clockin
+router.post('/clockin', authMiddleware, roleMiddleware(['employee']), clockIn);
+
+// @desc    An employee clocks out for the day
+// @route   POST /api/attendance/clockout
+router.post('/clockout', authMiddleware, roleMiddleware(['employee']), clockOut);
 
 // @desc    An employee gets their own attendance records
 // @route   GET /api/attendance/my-records
 router.get('/my-records', authMiddleware, roleMiddleware(['employee']), getMyAttendanceRecords);
 
 
-// --- Admin Routes ---
-
-// @desc    Admin logs or updates attendance for an employee
-// @route   POST /api/attendance/admin/log
-router.post('/admin/log', authMiddleware, roleMiddleware(['admin']), adminLogOrUpdateAttendance);
+// --- Admin/Management Routes ---
 
 // @desc    Admin gets attendance for a specific employee
 // @route   GET /api/attendance/admin/employee/:employeeId
 router.get('/admin/employee/:employeeId', authMiddleware, roleMiddleware(['admin']), getEmployeeAttendanceForAdmin);
 
 module.exports = router;
+

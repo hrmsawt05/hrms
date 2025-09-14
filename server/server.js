@@ -23,6 +23,7 @@ const salaryRoutes = require('./routes/salaryRoutes');
 const salaryStructureRoutes = require('./routes/salaryStructureRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const departmentRoutes = require('./routes/departmentRoutes'); 
+const todoRoutes = require('./routes/todoRoutes');
 
 // Mount Routes
 app.use('/api/auth', authRoutes);
@@ -32,6 +33,7 @@ app.use('/api/salaries', salaryRoutes);
 app.use('/api/salary-structures', salaryStructureRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/departments', departmentRoutes); 
+app.use('/api/todos', todoRoutes);
 
 // Default route
 app.get('/', (req, res) => {
